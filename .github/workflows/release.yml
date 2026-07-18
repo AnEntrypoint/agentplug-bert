@@ -1,0 +1,58 @@
+name: release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'weights/**'
+      - 'Cargo.toml'
+      - '.github/workflows/release.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: agentplug-bert-release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-wasip1
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Fetch weights (sha256-verified, not committed to git)
+        run: bash scripts/fetch-weights.sh
+
+      - name: Build
+        run: cargo build --release --target wasm32-wasip1
+
+      - name: Read version
+        id: ver
+        run: echo "version=$(grep '^version' Cargo.toml | head -1 | sed 's/.*= *\"//;s/\"//')" >> "$GITHUB_OUTPUT"
+
+      - name: Stage release assets with checksum
+        run: |
+          mkdir -p release-assets
+          cp target/wasm32-wasip1/release/agentplug_bert.wasm release-assets/bert.wasm
+          sha256sum release-assets/bert.wasm | sed 's/ \*/  /' > release-assets/bert.wasm.sha256
+
+      - name: Publish to agentplug-bert-bin Release
+        env:
+          GH_TOKEN: ${{ secrets.PUBLISHER_TOKEN }}
+          VER: ${{ steps.ver.outputs.version }}
+        run: |
+          set -e
+          if ! gh release view "v$VER" --repo AnEntrypoint/agentplug-bert-bin >/dev/null 2>&1; then
+            gh release create "v$VER" \
+              --repo AnEntrypoint/agentplug-bert-bin \
+              --title "agentplug-bert v$VER" \
+              --notes "BGE-small embedding agentplug plugin, auto-published at $GITHUB_SHA"
+          fi
+          gh release upload "v$VER" --repo AnEntrypoint/agentplug-bert-bin --clobber release-assets/*
