@@ -149,16 +149,6 @@ fn embed_text_uncached(text: &str) -> Option<Vec<f32>> {
         elog(&format!("agentplug-bert embed_text empty tokenization (text_len={})", text.len()));
         return None;
     }
-    // Round up to the same fixed bucket set embed_texts_batch uses -- see
-    // round_up_to_bucket's doc comment for why (collapses distinct tensor
-    // shapes so the wasm allocator's freed chunks actually get reused across
-    // calls instead of fragmenting the monotonic linear memory upward).
-    let padded_len = round_up_to_bucket(seq_len);
-    if padded_len > seq_len {
-        ids.extend(std::iter::repeat(0u32).take(padded_len - seq_len));
-        mask.extend(std::iter::repeat(0u32).take(padded_len - seq_len));
-    }
-    let seq_len = padded_len;
 
     let ids_t = step!("Tensor::from_vec(ids)", Tensor::from_vec(ids.clone(), (1, seq_len), &c.device));
     let mask_t = step!("Tensor::from_vec(mask)", Tensor::from_vec(mask.clone(), (1, seq_len), &c.device));
@@ -211,41 +201,6 @@ fn embed_text_uncached(text: &str) -> Option<Vec<f32>> {
 /// integration. Ported verbatim as the fix, not rediscovered.
 const MAX_SUBBATCH_ITEMS: usize = 32;
 const MAX_SUBBATCH_PADDED_ELEMENTS: usize = 32 * 512;
-
-/// Fixed seq_len buckets a sub-batch's max_len rounds up to, instead of
-/// padding to the exact longest item in that sub-batch. WASM linear memory
-/// is architecturally monotonic (memory.grow only grows, no shrink exists in
-/// the spec) and the default wasm32-wasip1 allocator (dlmalloc) can only
-/// satisfy a NEW allocation from its free-list if a previously-freed chunk
-/// is large enough and similarly shaped -- across ~100+ sequential
-/// embed_texts_batch calls (one per indexed file) each producing a
-/// slightly-different exact max_len, every call's (batch_n, max_len) tensor
-/// shape is close to unique, so freed chunks from call N rarely satisfy call
-/// N+1's allocation and the allocator ratchets the high-water mark up
-/// repeatedly instead of converging -- live-witnessed this session as
-/// permanent ~1.8GB daemon RSS growth after one full-repo codeinsight index
-/// pass (114 files), even though the true PER-CALL peak (per this file's own
-/// prior MAX_SUBBATCH_PADDED_ELEMENTS fix) is only tens of MB. Rounding every
-/// sub-batch's max_len up to one of a small fixed set of buckets collapses
-/// the space of distinct tensor shapes the allocator ever sees, so freed
-/// chunks from an earlier call are far more likely to exactly fit a later
-/// call's allocation -- fewer distinct sizes, more reuse, lower converged
-/// ceiling. Bucket steps roughly double (32/64/128/256/384/512) since
-/// attention cost is O(max_len^2): a chunk landing at 130 tokens pads to 256
-/// tokens' 4x compute/memory cost either way this rounds it, so coarser
-/// steps near the top (384/512) cost little extra over exact-fit while still
-/// converging the shape space; finer steps near the bottom (32/64) matter
-/// more since most real code/prose chunks (per truncate_for_embed's ~1200
-/// char cap, tuned to land around 200-300 tokens) cluster there.
-fn round_up_to_bucket(max_len: usize) -> usize {
-    const BUCKETS: [usize; 6] = [32, 64, 128, 256, 384, 512];
-    for &b in &BUCKETS {
-        if max_len <= b {
-            return b;
-        }
-    }
-    max_len
-}
 
 pub fn embed_texts_batch(texts: &[String]) -> Vec<Option<Vec<f32>>> {
     if texts.is_empty() {
@@ -328,7 +283,7 @@ pub fn embed_texts_batch(texts: &[String]) -> Vec<Option<Vec<f32>>> {
         let sub_ids = &per_item_ids[start..end];
         let sub_mask = &per_item_mask[start..end];
         let batch_n = sub_ids.len();
-        let max_len = round_up_to_bucket(sub_max_len);
+        let max_len = sub_max_len;
 
         let mut ids_flat: Vec<u32> = Vec::with_capacity(batch_n * max_len);
         let mut mask_flat: Vec<u32> = Vec::with_capacity(batch_n * max_len);
