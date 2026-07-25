@@ -67,13 +67,12 @@ fn bge_small_config() -> Config {
     }
 }
 
-fn init_ctx() -> Result<EmbedCtx, String> {
-    // See rs-plugkit's embed.rs for the full root-cause writeup: gemm's
-    // wasm32 SIMD dispatch is a runtime AtomicBool that defaults false
-    // regardless of the -C target-feature=+simd128 compile flag; every real
-    // host loading this module (wasmtime via agentplug-runner, or a browser
-    // engine) has simd128 support, so force-enabling is safe unconditionally.
+fn force_enable_gemm_wasm_simd128_since_every_real_host_supports_it() {
     gemm::set_wasm_simd128(true);
+}
+
+fn init_ctx() -> Result<EmbedCtx, String> {
+    force_enable_gemm_wasm_simd128_since_every_real_host_supports_it();
 
     let tokenizer = Tokenizer::from_bytes(TOKENIZER_JSON).map_err(|e| format!("tokenizer load: {e}"))?;
     let device = Device::Cpu;
@@ -194,13 +193,8 @@ fn embed_text_uncached(text: &str) -> Option<Vec<f32>> {
     Some(out)
 }
 
-/// Sub-batch cap on total padded elements (batch_n * max_len), not just item
-/// count -- BERT attention is O(batch_n * heads * max_len^2) per layer, and
-/// an unbounded batch padded to its own longest sequence produced a real
-/// ~1.8GB single allocation live-witnessed in the original rs-plugkit
-/// integration. Ported verbatim as the fix, not rediscovered.
 const MAX_SUBBATCH_ITEMS: usize = 32;
-const MAX_SUBBATCH_PADDED_ELEMENTS: usize = 32 * 512;
+const MAX_SUBBATCH_PADDED_ELEMENTS_TO_BOUND_QUADRATIC_ATTENTION_MEMORY: usize = 32 * 512;
 
 pub fn embed_texts_batch(texts: &[String]) -> Vec<Option<Vec<f32>>> {
     if texts.is_empty() {
@@ -269,7 +263,7 @@ pub fn embed_texts_batch(texts: &[String]) -> Vec<Option<Vec<f32>>> {
         while end < n && (end - start) < MAX_SUBBATCH_ITEMS {
             let candidate_max_len = sub_max_len.max(per_item_ids[end].len().max(1));
             let candidate_items = end - start + 1;
-            if candidate_items * candidate_max_len > MAX_SUBBATCH_PADDED_ELEMENTS && candidate_items > 1 {
+            if candidate_items * candidate_max_len > MAX_SUBBATCH_PADDED_ELEMENTS_TO_BOUND_QUADRATIC_ATTENTION_MEMORY && candidate_items > 1 {
                 break;
             }
             sub_max_len = candidate_max_len;
