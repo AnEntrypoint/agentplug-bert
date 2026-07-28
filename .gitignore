@@ -1,3 +1,7 @@
 /target
 Cargo.lock
 /weights
+
+# >>> plugkit managed
+.gm/exec-spool/
+# <<< plugkit managed
