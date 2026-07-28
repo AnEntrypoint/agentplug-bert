@@ -127,6 +127,17 @@ pub fn embed_text(text: &str) -> Option<Vec<f32>> {
     Some(v)
 }
 
+const SEQ_LEN_BUCKETS: [usize; 6] = [32, 64, 128, 256, 384, 512];
+
+fn round_up_to_bucket(len: usize) -> usize {
+    for &b in &SEQ_LEN_BUCKETS {
+        if len <= b {
+            return b;
+        }
+    }
+    len
+}
+
 fn embed_text_uncached(text: &str) -> Option<Vec<f32>> {
     let c = match ctx() {
         Ok(c) => c,
@@ -143,10 +154,15 @@ fn embed_text_uncached(text: &str) -> Option<Vec<f32>> {
         ids.truncate(MAX_TOKENS);
         mask.truncate(MAX_TOKENS);
     }
-    let seq_len = ids.len();
-    if seq_len == 0 {
+    let real_len = ids.len();
+    if real_len == 0 {
         elog(&format!("agentplug-bert embed_text empty tokenization (text_len={})", text.len()));
         return None;
+    }
+    let seq_len = round_up_to_bucket(real_len);
+    if seq_len > real_len {
+        ids.resize(seq_len, 0u32);
+        mask.resize(seq_len, 0u32);
     }
 
     let ids_t = step!("Tensor::from_vec(ids)", Tensor::from_vec(ids.clone(), (1, seq_len), &c.device));
@@ -261,12 +277,12 @@ pub fn embed_texts_batch(texts: &[String]) -> Vec<Option<Vec<f32>>> {
         let mut end = start;
         let mut sub_max_len = 1usize;
         while end < n && (end - start) < MAX_SUBBATCH_ITEMS {
-            let candidate_max_len = sub_max_len.max(per_item_ids[end].len().max(1));
+            let candidate_max_len = round_up_to_bucket(sub_max_len.max(per_item_ids[end].len().max(1)));
             let candidate_items = end - start + 1;
             if candidate_items * candidate_max_len > MAX_SUBBATCH_PADDED_ELEMENTS_TO_BOUND_QUADRATIC_ATTENTION_MEMORY && candidate_items > 1 {
                 break;
             }
-            sub_max_len = candidate_max_len;
+            sub_max_len = sub_max_len.max(per_item_ids[end].len().max(1));
             end += 1;
         }
         if end == start {
@@ -277,7 +293,7 @@ pub fn embed_texts_batch(texts: &[String]) -> Vec<Option<Vec<f32>>> {
         let sub_ids = &per_item_ids[start..end];
         let sub_mask = &per_item_mask[start..end];
         let batch_n = sub_ids.len();
-        let max_len = sub_max_len;
+        let max_len = round_up_to_bucket(sub_max_len);
 
         let mut ids_flat: Vec<u32> = Vec::with_capacity(batch_n * max_len);
         let mut mask_flat: Vec<u32> = Vec::with_capacity(batch_n * max_len);
@@ -396,7 +412,7 @@ pub fn handle_embed(body: &serde_json::Value) -> u64 {
     let text = body.get("text").and_then(|v| v.as_str()).unwrap_or("");
     let is_query = body.get("kind").and_then(|v| v.as_str()) == Some("query");
     if text.trim().is_empty() {
-        return return_json(serde_json::json!({"ok": false, "error": "empty_text"}));
+        return return_json(serde_json::json!({"ok": false, "error": "empty_text", "plugin": "bert"}));
     }
     let result = if is_query {
         let trimmed = text.trim();
@@ -415,7 +431,7 @@ pub fn handle_embed(body: &serde_json::Value) -> u64 {
     };
     match result {
         Some(v) => return_json(serde_json::json!({"ok": true, "embedding": vec_to_json(v), "dim": EMBED_DIM})),
-        None => return_json(serde_json::json!({"ok": false, "error": "embed_failed"})),
+        None => return_json(serde_json::json!({"ok": false, "error": "embed_failed", "plugin": "bert"})),
     }
 }
 

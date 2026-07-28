@@ -1,8 +1,3 @@
-// Every agentplug plugin's boot-edge: alloc/free for the host to write
-// call arguments into this module's own linear memory, plugin_call as the
-// single dispatch entrypoint. Wire format is docs/ABI.md in the agentplug
-// repo -- ptr/len pairs, results packed as (ptr | len<<32) into a u64.
-
 use std::alloc::{alloc, dealloc, Layout};
 use std::mem;
 
@@ -24,7 +19,7 @@ pub extern "C" fn plugkit_free(ptr: u32, len: u32) {
     unsafe { dealloc(ptr as *mut u8, layout) };
 }
 
-pub fn read_str(ptr: u32, len: u32) -> String {
+pub fn read_str_from_host_written_linear_memory(ptr: u32, len: u32) -> String {
     if len == 0 {
         return String::new();
     }
@@ -32,6 +27,10 @@ pub fn read_str(ptr: u32, len: u32) -> String {
         let slice = std::slice::from_raw_parts(ptr as *const u8, len as usize);
         String::from_utf8_lossy(slice).into_owned()
     }
+}
+
+pub fn pack_ptr_len_into_u64_result(ptr: u32, len: usize) -> u64 {
+    (ptr as u64 & 0xffff_ffff) | ((len as u64) << 32)
 }
 
 pub fn return_bytes(bytes: Vec<u8>) -> u64 {
@@ -43,7 +42,7 @@ pub fn return_bytes(bytes: Vec<u8>) -> u64 {
     unsafe {
         std::ptr::copy_nonoverlapping(bytes.as_ptr(), ptr as *mut u8, len);
     }
-    (ptr as u64 & 0xffff_ffff) | ((len as u64) << 32)
+    pack_ptr_len_into_u64_result(ptr, len)
 }
 
 pub fn return_json(v: serde_json::Value) -> u64 {
@@ -61,13 +60,13 @@ pub fn elog(msg: &str) {
 
 #[no_mangle]
 pub extern "C" fn plugin_call(verb_ptr: u32, verb_len: u32, body_ptr: u32, body_len: u32) -> u64 {
-    let verb = read_str(verb_ptr, verb_len);
-    let body_str = read_str(body_ptr, body_len);
+    let verb = read_str_from_host_written_linear_memory(verb_ptr, verb_len);
+    let body_str = read_str_from_host_written_linear_memory(body_ptr, body_len);
     let body: serde_json::Value = serde_json::from_str(&body_str).unwrap_or(serde_json::json!({}));
 
     match verb.as_str() {
         "embed" => crate::embed::handle_embed(&body),
         "embed_batch" => crate::embed::handle_embed_batch(&body),
-        _ => return_json(serde_json::json!({"ok": false, "error": "unknown_verb", "verb": verb})),
+        _ => return_json(serde_json::json!({"ok": false, "error": "unknown_verb", "verb": verb, "plugin": "bert"})),
     }
 }
