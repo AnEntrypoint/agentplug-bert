@@ -67,13 +67,7 @@ fn bge_small_config() -> Config {
     }
 }
 
-fn force_enable_gemm_wasm_simd128_since_every_real_host_supports_it() {
-    gemm::set_wasm_simd128(true);
-}
-
 fn init_ctx() -> Result<EmbedCtx, String> {
-    force_enable_gemm_wasm_simd128_since_every_real_host_supports_it();
-
     let tokenizer = Tokenizer::from_bytes(TOKENIZER_JSON).map_err(|e| format!("tokenizer load: {e}"))?;
     let device = Device::Cpu;
     let vb = VarBuilder::from_slice_safetensors(MODEL_SAFETENSORS, DType::F32, &device)
