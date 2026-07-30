@@ -7,7 +7,11 @@ pub extern "C" fn plugkit_alloc(len: u32) -> u32 {
         return 0;
     }
     let layout = Layout::from_size_align(len as usize, mem::align_of::<u8>()).unwrap();
-    unsafe { alloc(layout) as u32 }
+    let ptr = unsafe { alloc(layout) };
+    if ptr.is_null() {
+        std::alloc::handle_alloc_error(layout);
+    }
+    ptr as u32
 }
 
 #[no_mangle]
