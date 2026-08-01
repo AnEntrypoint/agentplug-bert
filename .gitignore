@@ -4,4 +4,9 @@ Cargo.lock
 
 # >>> plugkit managed
 .gm/exec-spool/
+.gm/instructions-source-cache/
+.gm/config-source-cache/
+.gm/config-source-cache-default/
+.gm/config-source-cache-default.*.sync.json
+.gm/config-source-cache.*.sync.json
 # <<< plugkit managed
