@@ -71,6 +71,16 @@ pub extern "C" fn plugin_call(verb_ptr: u32, verb_len: u32, body_ptr: u32, body_
     match verb.as_str() {
         "embed" => crate::embed::handle_embed(&body),
         "embed_batch" => crate::embed::handle_embed_batch(&body),
+        // Answers "what can you do" without side effects, so a caller can
+        // probe before dispatching instead of discovering a missing verb as
+        // an indistinguishable ok:false at the call site.
+        "capabilities" => return_json(serde_json::json!({
+            "ok": true,
+            "plugin": "bert",
+            "verbs": ["embed", "embed_batch", "capabilities"],
+            "payload_field": {"embed": "embedding", "embed_batch": "embeddings"},
+            "embed_dim": crate::embed::EMBED_DIM,
+        })),
         _ => return_json(serde_json::json!({"ok": false, "error": "unknown_verb", "verb": verb, "plugin": "bert"})),
     }
 }
