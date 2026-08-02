@@ -24,5 +24,7 @@ jobs:
       release_title_prefix: agentplug-bert
       pre_build_steps: bash scripts/fetch-weights.sh
       build_command: cargo build --release --target wasm32-wasip1
+      npm_package_name: agentplug-bert-wasm
     secrets:
       publisher_token: ${{ secrets.PUBLISHER_TOKEN }}
+      npm_token: ${{ secrets.NPM_TOKEN }}
