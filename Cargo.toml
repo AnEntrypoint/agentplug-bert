@@ -2,12 +2,12 @@
 name = "agentplug-bert"
 version = "0.1.1"
 edition = "2021"
+build = "build.rs"
 
 [lib]
 name = "agentplug_bert"
 path = "src/lib.rs"
 crate-type = ["cdylib"]
-build = "build.rs"
 
 [profile.release]
 strip = true
