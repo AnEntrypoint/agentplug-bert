@@ -10,3 +10,5 @@ Cargo.lock
 .gm/config-source-cache-default.*.sync.json
 .gm/config-source-cache.*.sync.json
 # <<< plugkit managed
+config.bat
+node_modules
