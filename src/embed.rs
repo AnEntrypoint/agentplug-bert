@@ -7,7 +7,7 @@ use tokenizers::Tokenizer;
 
 use crate::abi::{elog, return_json};
 
-static MODEL_SAFETENSORS: &[u8] = include_bytes!("../weights/bge-small-en-v1.5.safetensors");
+static MODEL_SAFETENSORS: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/bge-small-en-v1.5.f16.safetensors"));
 static TOKENIZER_JSON: &[u8] = include_bytes!("../weights/bge-tokenizer.json");
 
 const EMBED_MODEL_NAME: &str = "BAAI/bge-small-en-v1.5";
