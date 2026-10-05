@@ -1,7 +1,8 @@
 [package]
 name = "agentplug-bert"
-version = "0.1."
+version = "0.1.2"
 edition = "2021"
+build = "build.rs"
 
 [lib]
 name = "agentplug_bert"
@@ -22,3 +23,7 @@ candle-transformers = { version = "0.8", default-features = false }
 gemm = { version = "0.17", default-features = false }
 tokenizers = { version = "0.23", default-features = false, features = ["unstable_wasm"] }
 getrandom = { version = "0.2", features = ["custom"] }
+
+[build-dependencies]
+safetensors = "0.4"
+half = "2"
