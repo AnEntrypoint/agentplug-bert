@@ -62,6 +62,16 @@ pub fn elog(msg: &str) {
     let _ = unsafe { host_log(2, msg.as_ptr(), msg.len() as u32) };
 }
 
+fn capabilities_response() -> u64 {
+    return_json(serde_json::json!({
+        "ok": true,
+        "plugin": "bert",
+        "verbs": ["embed", "embed_batch", "capabilities"],
+        "payload_field": {"embed": "embedding", "embed_batch": "embeddings"},
+        "embed_dim": crate::embed::EMBED_DIM,
+    }))
+}
+
 #[no_mangle]
 pub extern "C" fn plugin_call(verb_ptr: u32, verb_len: u32, body_ptr: u32, body_len: u32) -> u64 {
     let verb = read_str_from_host_written_linear_memory(verb_ptr, verb_len);
@@ -71,16 +81,9 @@ pub extern "C" fn plugin_call(verb_ptr: u32, verb_len: u32, body_ptr: u32, body_
     match verb.as_str() {
         "embed" => crate::embed::handle_embed(&body),
         "embed_batch" => crate::embed::handle_embed_batch(&body),
-        // Answers "what can you do" without side effects, so a caller can
-        // probe before dispatching instead of discovering a missing verb as
-        // an indistinguishable ok:false at the call site.
-        "capabilities" => return_json(serde_json::json!({
-            "ok": true,
-            "plugin": "bert",
-            "verbs": ["embed", "embed_batch", "capabilities"],
-            "payload_field": {"embed": "embedding", "embed_batch": "embeddings"},
-            "embed_dim": crate::embed::EMBED_DIM,
-        })),
-        _ => return_json(serde_json::json!({"ok": false, "error": "unknown_verb", "verb": verb, "plugin": "bert"})),
+        "capabilities" => capabilities_response(),
+        _ => return_json(
+            serde_json::json!({"ok": false, "error": "unknown_verb", "verb": verb, "plugin": "bert"}),
+        ),
     }
 }
