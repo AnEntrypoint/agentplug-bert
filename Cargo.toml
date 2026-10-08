@@ -1,0 +1,29 @@
+[package]
+name = "agentplug-bert"
+version = "0.1.6"
+edition = "2021"
+build = "build.rs"
+
+[lib]
+name = "agentplug_bert"
+path = "src/lib.rs"
+crate-type = ["cdylib"]
+
+[profile.release]
+strip = true
+lto = true
+codegen-units = 1
+opt-level = "z"
+
+[dependencies]
+serde_json = "1"
+candle-core = { version = "0.8", default-features = false }
+candle-nn = { version = "0.8", default-features = false }
+candle-transformers = { version = "0.8", default-features = false }
+gemm = { version = "0.17", default-features = false }
+tokenizers = { version = "0.23", default-features = false, features = ["unstable_wasm"] }
+getrandom = { version = "0.2", features = ["custom"] }
+
+[build-dependencies]
+safetensors = "0.4"
+half = "2"

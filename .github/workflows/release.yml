@@ -1,0 +1,28 @@
+name: release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'weights/**'
+      - 'Cargo.toml'
+      - '.github/workflows/release.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: agentplug-bert-release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  release:
+    uses: AnEntrypoint/rs-plugkit/.github/workflows/wasm-plugin-release.yml@main
+    with:
+      wasm_artifact_name: agentplug_bert.wasm
+      published_asset_basename: bert
+      release_repo: AnEntrypoint/agentplug-bert-bin
+      release_title_prefix: agentplug-bert
+      pre_build_steps: bash scripts/fetch-weights.sh
+      build_command: cargo build --release --target wasm32-wasip1
+    secrets:
+      publisher_token: ${{ secrets.PUBLISHER_TOKEN }}
