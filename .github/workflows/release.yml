@@ -24,8 +24,5 @@ jobs:
       release_title_prefix: agentplug-bert
       pre_build_steps: bash scripts/fetch-weights.sh
       build_command: cargo build --release --target wasm32-wasip1
-      release_signing_key_id: plugin-release-20261006-2
-      release_signing_public_key: 022fa8098b8fcbc63a63b5ff5d49d4246a5c89d8cabc14925087fcab728bf6f0
     secrets:
       publisher_token: ${{ secrets.PUBLISHER_TOKEN }}
-      release_signing_key: ${{ secrets.RELEASE_SIGNING_KEY }}
